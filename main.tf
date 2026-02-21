@@ -99,9 +99,9 @@ module "blog_autoscaling" {
   instance_type        = var.instance_type
   image_id             = data.aws_ami.app_ami.id
 
-  traffic_source_attachments = (
-    blog_alb = (
+  traffic_source_attachments = {
+    blog-alb = {
       traffic_source_identifier = aws_lb_target_group.blog.arn
-    )
-  )
+    }
+  }
 }
