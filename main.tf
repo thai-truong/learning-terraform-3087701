@@ -17,7 +17,7 @@ data "aws_ami" "app_ami" {
 module "blog_vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
-  name = "dev-vpc"
+  name = "blog-vpc"
   cidr = "10.0.0.0/16"
 
   azs             = ["us-west-2a", "us-west-2b", "us-west-2c"]
@@ -32,22 +32,10 @@ module "blog_vpc" {
   }
 }
 
-resource "aws_instance" "blog" {
-  ami                    = data.aws_ami.app_ami.id
-  instance_type          = var.instance_type 
-  vpc_security_group_ids = [module.blog_security_group.security_group_id]
-
-  subnet_id = module.blog_vpc.public_subnets[0]
-
-  tags = {
-    Name = "Blog"
-  }
-}
-
 module "blog_security_group" {
   source  = "terraform-aws-modules/security-group/aws"
   version = "5.3.1"
-  name    = "blog_security_new"
+  name    = "blog-security"
 
   vpc_id = module.blog_vpc.vpc_id
 
@@ -61,7 +49,7 @@ module "blog_security_group" {
 module "blog_alb" {
   source = "terraform-aws-modules/alb/aws"
 
-  name    = "dev-alb"
+  name    = "blog-alb"
   vpc_id  = module.blog_vpc.vpc_id
   subnets = module.blog_vpc.public_subnets
 
@@ -93,4 +81,27 @@ resource "aws_lb_target_group_attachment" "blog" {
   target_group_arn = aws_lb_target_group.blog.arn
   target_id        = aws_instance.blog.id
   port             = 80
+}
+
+module "blog_autoscaling" {
+  source  = "terraform-aws-modules/autoscaling/aws"
+  version = "9.2.0"
+
+  name = "blog"
+
+  min_size = 1
+  max_size = 2
+
+  vpc_zone_identifier = module.blog_vpc.public_subnets
+
+  launch_template_name = "blog"
+  security_groups      = [module.blog_security_group.security_group_id]
+  instance_type        = var.instance_type
+  image_id             = data.aws_ami.app_ami.id
+
+  traffic_source_attachments = (
+    blog_alb = (
+      traffic_source_identifier = aws_lb_target_group.blog.arn
+    )
+  )
 }
